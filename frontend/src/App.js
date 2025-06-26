@@ -14,6 +14,13 @@ const KeywordSuggestionApp = () => {
   const [searchHistory, setSearchHistory] = useState([]);
   const [bulkSearchMode, setBulkSearchMode] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
+  const [bulkStatus, setBulkStatus] = useState({ 
+    currentBatch: 0, 
+    totalBatches: 0, 
+    retryAttempts: 0,
+    successCount: 0,
+    failedCount: 0 
+  });
 
   // Load saved keywords and search history from localStorage on component mount
   useEffect(() => {
