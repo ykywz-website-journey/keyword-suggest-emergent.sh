@@ -93,58 +93,92 @@ const KeywordSuggestionApp = () => {
     setBulkProgress({ current: 0, total: suffixes.length });
     
     const allSuggestions = [];
-    const batchSize = 5; // Process 5 requests at a time to avoid overwhelming the server
+    const batchSize = 3; // Reduced batch size to be more respectful to APIs
+    const requestDelay = 1000; // 1 second delay between batches
+    const retryDelay = 2000; // 2 seconds delay between retries
+    const maxRetries = 3;
+    
+    // Helper function to make a single request with retry logic
+    const makeRequestWithRetry = async (suffix, retryCount = 0) => {
+      try {
+        const searchQuery = query + suffix;
+        const response = await axios.get(`${API}/suggestions/${selectedSource}`, {
+          params: { q: searchQuery },
+          timeout: 10000 // 10 second timeout
+        });
+        
+        return {
+          query: searchQuery,
+          suggestions: response.data.suggestions || [],
+          source: selectedSource,
+          success: true
+        };
+      } catch (error) {
+        console.warn(`Attempt ${retryCount + 1} failed for ${query}${suffix}:`, error.message);
+        
+        if (retryCount < maxRetries) {
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+          return makeRequestWithRetry(suffix, retryCount + 1);
+        } else {
+          console.error(`All ${maxRetries + 1} attempts failed for ${query}${suffix}`);
+          return { 
+            query: query + suffix, 
+            suggestions: [], 
+            source: selectedSource, 
+            success: false,
+            error: error.message 
+          };
+        }
+      }
+    };
     
     try {
+      let processedCount = 0;
+      
       for (let i = 0; i < suffixes.length; i += batchSize) {
         const batch = suffixes.slice(i, i + batchSize);
         
-        // Create batch of requests
-        const batchPromises = batch.map(async (suffix) => {
-          try {
-            const searchQuery = query + suffix;
-            const response = await axios.get(`${API}/suggestions/${selectedSource}`, {
-              params: { q: searchQuery }
-            });
-            
-            return {
-              query: searchQuery,
-              suggestions: response.data.suggestions || [],
-              source: selectedSource
-            };
-          } catch (error) {
-            console.error(`Error fetching suggestions for ${query}${suffix}:`, error);
-            return { query: query + suffix, suggestions: [], source: selectedSource };
-          }
-        });
+        console.log(`Processing batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(suffixes.length/batchSize)}: ${batch.join(', ')}`);
+        
+        // Create batch of requests with retry logic
+        const batchPromises = batch.map(suffix => makeRequestWithRetry(suffix));
         
         // Wait for batch to complete
         const batchResults = await Promise.all(batchPromises);
         
-        // Add suggestions to the list
+        // Process results and add suggestions
         batchResults.forEach(result => {
-          result.suggestions.forEach(suggestion => {
-            // Avoid duplicates
-            if (!allSuggestions.find(s => s.text === suggestion && s.source === result.source)) {
-              allSuggestions.push({
-                text: suggestion,
-                source: result.source,
-                originalQuery: result.query
-              });
-            }
-          });
+          processedCount++;
+          
+          if (result.success) {
+            result.suggestions.forEach(suggestion => {
+              // Avoid duplicates
+              if (!allSuggestions.find(s => s.text === suggestion && s.source === result.source)) {
+                allSuggestions.push({
+                  text: suggestion,
+                  source: result.source,
+                  originalQuery: result.query
+                });
+              }
+            });
+          }
+          
+          // Update progress
+          setBulkProgress({ current: processedCount, total: suffixes.length });
         });
         
-        // Update progress
-        setBulkProgress({ current: Math.min(i + batchSize, suffixes.length), total: suffixes.length });
+        // Update suggestions incrementally for better UX
+        setSuggestions([...allSuggestions]);
         
-        // Add a small delay between batches to be respectful to the APIs
+        // Add delay between batches (except for the last batch)
         if (i + batchSize < suffixes.length) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+          console.log(`Waiting ${requestDelay}ms before next batch...`);
+          await new Promise(resolve => setTimeout(resolve, requestDelay));
         }
       }
       
-      setSuggestions(allSuggestions);
+      console.log(`Bulk search completed! Found ${allSuggestions.length} unique suggestions from ${processedCount} requests.`);
       
       // Add to search history
       const newHistoryItem = {
