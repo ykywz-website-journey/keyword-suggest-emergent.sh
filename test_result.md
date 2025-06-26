@@ -221,11 +221,7 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus:
-    - "Google Search Suggestions API Proxy"
-    - "Amazon Product Suggestions API Proxy"
-    - "YouTube Search Suggestions API Proxy"
-    - "Combined All Sources API Endpoint"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
