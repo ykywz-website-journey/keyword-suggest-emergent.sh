@@ -130,6 +130,9 @@ const KeywordSuggestionApp = () => {
       } catch (error) {
         console.warn(`Attempt ${retryCount + 1} failed for ${query}${suffix}:`, error.message);
         
+        // Update retry status
+        setBulkStatus(prev => ({ ...prev, retryAttempts: prev.retryAttempts + 1 }));
+        
         if (retryCount < maxRetries) {
           // Wait before retry
           await new Promise(resolve => setTimeout(resolve, retryDelay));
