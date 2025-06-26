@@ -1,14 +1,18 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException, Query
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import requests
+import json
+import re
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 import uuid
 from datetime import datetime
+import urllib.parse
 
 
 ROOT_DIR = Path(__file__).parent
@@ -35,10 +39,148 @@ class StatusCheck(BaseModel):
 class StatusCheckCreate(BaseModel):
     client_name: str
 
+class KeywordSuggestion(BaseModel):
+    text: str
+    source: str
+
+class SuggestionResponse(BaseModel):
+    query: str
+    source: str
+    suggestions: List[str]
+
+# Helper function to clean Google/YouTube suggestions
+def clean_google_response(text: str) -> List[str]:
+    try:
+        # Remove the JSONP callback prefix for Google responses
+        if text.startswith(')]}\''):
+            text = text[4:]
+        
+        # Parse the JSON
+        data = json.loads(text)
+        
+        # Extract suggestions from Google format
+        if isinstance(data, list) and len(data) > 1:
+            suggestions = []
+            for item in data[1]:
+                if isinstance(item, list) and len(item) > 0:
+                    suggestions.append(item[0])
+                elif isinstance(item, str):
+                    suggestions.append(item)
+            return suggestions
+        return []
+    except:
+        return []
+
+def clean_amazon_response(data: dict) -> List[str]:
+    try:
+        suggestions = []
+        if 'suggestions' in data:
+            for suggestion in data['suggestions']:
+                if 'value' in suggestion:
+                    suggestions.append(suggestion['value'])
+        return suggestions
+    except:
+        return []
+
 # Add your routes to the router instead of directly to app
 @api_router.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "Keyword Suggestion API"}
+
+@api_router.get("/suggestions/google", response_model=SuggestionResponse)
+async def get_google_suggestions(q: str = Query(..., description="Search query")):
+    try:
+        encoded_query = urllib.parse.quote(q)
+        url = f"http://www.google.com/complete/search?client=gws-wiz&q={encoded_query}&hl=en"
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        suggestions = clean_google_response(response.text)
+        
+        return SuggestionResponse(
+            query=q,
+            source="google",
+            suggestions=suggestions[:10]  # Limit to 10 suggestions
+        )
+    except Exception as e:
+        logging.error(f"Google API error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch Google suggestions")
+
+@api_router.get("/suggestions/amazon", response_model=SuggestionResponse)
+async def get_amazon_suggestions(q: str = Query(..., description="Search query")):
+    try:
+        encoded_query = urllib.parse.quote(q)
+        url = f"https://completion.amazon.com/api/2017/suggestions?mid=ATVPDKIKX0DER&lop=en_US&alias=aps&prefix={encoded_query}"
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        data = response.json()
+        suggestions = clean_amazon_response(data)
+        
+        return SuggestionResponse(
+            query=q,
+            source="amazon",
+            suggestions=suggestions[:10]  # Limit to 10 suggestions
+        )
+    except Exception as e:
+        logging.error(f"Amazon API error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch Amazon suggestions")
+
+@api_router.get("/suggestions/youtube", response_model=SuggestionResponse)
+async def get_youtube_suggestions(q: str = Query(..., description="Search query")):
+    try:
+        encoded_query = urllib.parse.quote(q)
+        url = f"http://google.com/complete/search?hl=en&client=youtube&hjson=t&ds=yt&q={encoded_query}"
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        suggestions = clean_google_response(response.text)
+        
+        return SuggestionResponse(
+            query=q,
+            source="youtube",
+            suggestions=suggestions[:10]  # Limit to 10 suggestions
+        )
+    except Exception as e:
+        logging.error(f"YouTube API error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch YouTube suggestions")
+
+@api_router.get("/suggestions/all", response_model=List[SuggestionResponse])
+async def get_all_suggestions(q: str = Query(..., description="Search query")):
+    """Get suggestions from all sources"""
+    results = []
+    
+    # Get Google suggestions
+    try:
+        google_result = await get_google_suggestions(q)
+        results.append(google_result)
+    except:
+        pass
+    
+    # Get Amazon suggestions
+    try:
+        amazon_result = await get_amazon_suggestions(q)
+        results.append(amazon_result)
+    except:
+        pass
+    
+    # Get YouTube suggestions
+    try:
+        youtube_result = await get_youtube_suggestions(q)
+        results.append(youtube_result)
+    except:
+        pass
+    
+    return results
 
 @api_router.post("/status", response_model=StatusCheck)
 async def create_status_check(input: StatusCheckCreate):
