@@ -98,6 +98,13 @@ const KeywordSuggestionApp = () => {
     }
     
     setBulkProgress({ current: 0, total: suffixes.length });
+    setBulkStatus({ 
+      currentBatch: 0, 
+      totalBatches: Math.ceil(suffixes.length / batchSize), 
+      retryAttempts: 0,
+      successCount: 0,
+      failedCount: 0 
+    });
     
     const allSuggestions = [];
     const batchSize = 3; // Reduced batch size to be more respectful to APIs
