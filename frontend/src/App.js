@@ -435,17 +435,26 @@ const KeywordSuggestionApp = () => {
               <div className="mt-4 p-4 bg-purple-50 rounded-lg">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-purple-700">
-                    Searching variations... ({bulkProgress.current}/{bulkProgress.total})
+                    Batch {bulkStatus.currentBatch}/{bulkStatus.totalBatches} • 
+                    Progress: {bulkProgress.current}/{bulkProgress.total}
                   </span>
                   <span className="text-sm text-purple-600">
                     {Math.round((bulkProgress.current / bulkProgress.total) * 100)}%
                   </span>
                 </div>
-                <div className="w-full bg-purple-200 rounded-full h-2">
+                <div className="w-full bg-purple-200 rounded-full h-2 mb-2">
                   <div 
                     className="bg-purple-600 h-2 rounded-full transition-all duration-300"
                     style={{ width: `${(bulkProgress.current / bulkProgress.total) * 100}%` }}
                   ></div>
+                </div>
+                <div className="flex justify-between text-xs text-purple-600">
+                  <span>✅ Success: {bulkStatus.successCount}</span>
+                  <span>❌ Failed: {bulkStatus.failedCount}</span>
+                  <span>🔄 Retries: {bulkStatus.retryAttempts}</span>
+                </div>
+                <div className="text-xs text-purple-500 mt-1 text-center">
+                  Searching with 1s delay between batches • Up to 3 retry attempts per request
                 </div>
               </div>
             )}
