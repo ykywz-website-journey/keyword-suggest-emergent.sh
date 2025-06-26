@@ -124,14 +124,17 @@ async def root():
 async def get_google_suggestions(q: str = Query(..., description="Search query")):
     try:
         encoded_query = urllib.parse.quote(q)
-        url = f"http://www.google.com/complete/search?client=gws-wiz&q={encoded_query}&hl=en"
+        url = f"http://suggestqueries.google.com/complete/search?client=firefox&q={encoded_query}"
         
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
         
         response = requests.get(url, headers=headers, timeout=10)
-        suggestions = clean_google_response(response.text)
+        
+        # This endpoint returns a simple JSON array: [query, [suggestions]]
+        data = response.json()
+        suggestions = data[1] if len(data) > 1 and isinstance(data[1], list) else []
         
         return SuggestionResponse(
             query=q,
