@@ -391,9 +391,19 @@ const KeywordSuggestionApp = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Suggestions Section */}
           <div className="bg-white rounded-xl shadow-lg p-6">
-            <h2 className="text-2xl font-semibold text-gray-800 mb-4">
-              Suggestions {query && `for "${query}"`}
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-semibold text-gray-800">
+                Suggestions {query && `for "${query}"`} ({suggestions.length})
+              </h2>
+              {suggestions.length > 0 && (
+                <button
+                  onClick={saveAllSuggestions}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+                >
+                  💾 Save All ({suggestions.length})
+                </button>
+              )}
+            </div>
             
             {loading ? (
               <div className="flex items-center justify-center py-8">
