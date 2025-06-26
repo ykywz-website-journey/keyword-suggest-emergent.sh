@@ -14,6 +14,13 @@ const KeywordSuggestionApp = () => {
   const [searchHistory, setSearchHistory] = useState([]);
   const [bulkSearchMode, setBulkSearchMode] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
+  const [bulkStatus, setBulkStatus] = useState({ 
+    currentBatch: 0, 
+    totalBatches: 0, 
+    retryAttempts: 0,
+    successCount: 0,
+    failedCount: 0 
+  });
 
   // Load saved keywords and search history from localStorage on component mount
   useEffect(() => {
@@ -90,61 +97,113 @@ const KeywordSuggestionApp = () => {
       suffixes.push(i.toString());
     }
     
+    // Define batchSize before using it
+    const batchSize = 3; // Reduced batch size to be more respectful to APIs
+    
     setBulkProgress({ current: 0, total: suffixes.length });
+    setBulkStatus({ 
+      currentBatch: 0, 
+      totalBatches: Math.ceil(suffixes.length / batchSize), 
+      retryAttempts: 0,
+      successCount: 0,
+      failedCount: 0 
+    });
     
     const allSuggestions = [];
-    const batchSize = 5; // Process 5 requests at a time to avoid overwhelming the server
+    const requestDelay = 1000; // 1 second delay between batches
+    const retryDelay = 2000; // 2 seconds delay between retries
+    const maxRetries = 3;
+    
+    // Helper function to make a single request with retry logic
+    const makeRequestWithRetry = async (suffix, retryCount = 0) => {
+      try {
+        const searchQuery = query + suffix;
+        const response = await axios.get(`${API}/suggestions/${selectedSource}`, {
+          params: { q: searchQuery },
+          timeout: 10000 // 10 second timeout
+        });
+        
+        return {
+          query: searchQuery,
+          suggestions: response.data.suggestions || [],
+          source: selectedSource,
+          success: true
+        };
+      } catch (error) {
+        console.warn(`Attempt ${retryCount + 1} failed for ${query}${suffix}:`, error.message);
+        
+        // Update retry status
+        setBulkStatus(prev => ({ ...prev, retryAttempts: prev.retryAttempts + 1 }));
+        
+        if (retryCount < maxRetries) {
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+          return makeRequestWithRetry(suffix, retryCount + 1);
+        } else {
+          console.error(`All ${maxRetries + 1} attempts failed for ${query}${suffix}`);
+          return { 
+            query: query + suffix, 
+            suggestions: [], 
+            source: selectedSource, 
+            success: false,
+            error: error.message 
+          };
+        }
+      }
+    };
     
     try {
+      let processedCount = 0;
+      
       for (let i = 0; i < suffixes.length; i += batchSize) {
         const batch = suffixes.slice(i, i + batchSize);
+        const currentBatchNum = Math.floor(i/batchSize) + 1;
         
-        // Create batch of requests
-        const batchPromises = batch.map(async (suffix) => {
-          try {
-            const searchQuery = query + suffix;
-            const response = await axios.get(`${API}/suggestions/${selectedSource}`, {
-              params: { q: searchQuery }
-            });
-            
-            return {
-              query: searchQuery,
-              suggestions: response.data.suggestions || [],
-              source: selectedSource
-            };
-          } catch (error) {
-            console.error(`Error fetching suggestions for ${query}${suffix}:`, error);
-            return { query: query + suffix, suggestions: [], source: selectedSource };
-          }
-        });
+        setBulkStatus(prev => ({ ...prev, currentBatch: currentBatchNum }));
+        
+        console.log(`Processing batch ${currentBatchNum}/${Math.ceil(suffixes.length/batchSize)}: ${batch.join(', ')}`);
+        
+        // Create batch of requests with retry logic
+        const batchPromises = batch.map(suffix => makeRequestWithRetry(suffix));
         
         // Wait for batch to complete
         const batchResults = await Promise.all(batchPromises);
         
-        // Add suggestions to the list
+        // Process results and add suggestions
         batchResults.forEach(result => {
-          result.suggestions.forEach(suggestion => {
-            // Avoid duplicates
-            if (!allSuggestions.find(s => s.text === suggestion && s.source === result.source)) {
-              allSuggestions.push({
-                text: suggestion,
-                source: result.source,
-                originalQuery: result.query
-              });
-            }
-          });
+          processedCount++;
+          
+          if (result.success) {
+            setBulkStatus(prev => ({ ...prev, successCount: prev.successCount + 1 }));
+            result.suggestions.forEach(suggestion => {
+              // Avoid duplicates
+              if (!allSuggestions.find(s => s.text === suggestion && s.source === result.source)) {
+                allSuggestions.push({
+                  text: suggestion,
+                  source: result.source,
+                  originalQuery: result.query
+                });
+              }
+            });
+          } else {
+            setBulkStatus(prev => ({ ...prev, failedCount: prev.failedCount + 1 }));
+          }
+          
+          // Update progress
+          setBulkProgress({ current: processedCount, total: suffixes.length });
         });
         
-        // Update progress
-        setBulkProgress({ current: Math.min(i + batchSize, suffixes.length), total: suffixes.length });
+        // Update suggestions incrementally for better UX
+        setSuggestions([...allSuggestions]);
         
-        // Add a small delay between batches to be respectful to the APIs
+        // Add delay between batches (except for the last batch)
         if (i + batchSize < suffixes.length) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+          console.log(`Waiting ${requestDelay}ms before next batch...`);
+          await new Promise(resolve => setTimeout(resolve, requestDelay));
         }
       }
       
-      setSuggestions(allSuggestions);
+      console.log(`Bulk search completed! Found ${allSuggestions.length} unique suggestions from ${processedCount} requests.`);
       
       // Add to search history
       const newHistoryItem = {
@@ -164,6 +223,13 @@ const KeywordSuggestionApp = () => {
       setLoading(false);
       setBulkSearchMode(false);
       setBulkProgress({ current: 0, total: 0 });
+      setBulkStatus({ 
+        currentBatch: 0, 
+        totalBatches: 0, 
+        retryAttempts: 0,
+        successCount: 0,
+        failedCount: 0 
+      });
     }
   };
 
@@ -371,17 +437,26 @@ const KeywordSuggestionApp = () => {
               <div className="mt-4 p-4 bg-purple-50 rounded-lg">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-purple-700">
-                    Searching variations... ({bulkProgress.current}/{bulkProgress.total})
+                    Batch {bulkStatus.currentBatch}/{bulkStatus.totalBatches} • 
+                    Progress: {bulkProgress.current}/{bulkProgress.total}
                   </span>
                   <span className="text-sm text-purple-600">
                     {Math.round((bulkProgress.current / bulkProgress.total) * 100)}%
                   </span>
                 </div>
-                <div className="w-full bg-purple-200 rounded-full h-2">
+                <div className="w-full bg-purple-200 rounded-full h-2 mb-2">
                   <div 
                     className="bg-purple-600 h-2 rounded-full transition-all duration-300"
                     style={{ width: `${(bulkProgress.current / bulkProgress.total) * 100}%` }}
                   ></div>
+                </div>
+                <div className="flex justify-between text-xs text-purple-600">
+                  <span>✅ Success: {bulkStatus.successCount}</span>
+                  <span>❌ Failed: {bulkStatus.failedCount}</span>
+                  <span>🔄 Retries: {bulkStatus.retryAttempts}</span>
+                </div>
+                <div className="text-xs text-purple-500 mt-1 text-center">
+                  Searching with 1s delay between batches • Up to 3 retry attempts per request
                 </div>
               </div>
             )}
