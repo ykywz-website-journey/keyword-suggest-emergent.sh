@@ -42,6 +42,7 @@ const KeywordSuggestionApp = () => {
     if (!query.trim()) return;
     
     setLoading(true);
+    setBulkSearchMode(false);
     try {
       const response = await axios.get(`${API}/suggestions/${selectedSource}`, {
         params: { q: query }
@@ -66,6 +67,103 @@ const KeywordSuggestionApp = () => {
       setSuggestions([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchBulkSuggestions = async () => {
+    if (!query.trim()) return;
+    
+    setLoading(true);
+    setBulkSearchMode(true);
+    setSuggestions([]);
+    
+    // Generate all variations: a-z and 0-9
+    const suffixes = [];
+    
+    // Add a-z
+    for (let i = 97; i <= 122; i++) {
+      suffixes.push(String.fromCharCode(i));
+    }
+    
+    // Add 0-9
+    for (let i = 0; i <= 9; i++) {
+      suffixes.push(i.toString());
+    }
+    
+    setBulkProgress({ current: 0, total: suffixes.length });
+    
+    const allSuggestions = [];
+    const batchSize = 5; // Process 5 requests at a time to avoid overwhelming the server
+    
+    try {
+      for (let i = 0; i < suffixes.length; i += batchSize) {
+        const batch = suffixes.slice(i, i + batchSize);
+        
+        // Create batch of requests
+        const batchPromises = batch.map(async (suffix) => {
+          try {
+            const searchQuery = query + suffix;
+            const response = await axios.get(`${API}/suggestions/${selectedSource}`, {
+              params: { q: searchQuery }
+            });
+            
+            return {
+              query: searchQuery,
+              suggestions: response.data.suggestions || [],
+              source: selectedSource
+            };
+          } catch (error) {
+            console.error(`Error fetching suggestions for ${query}${suffix}:`, error);
+            return { query: query + suffix, suggestions: [], source: selectedSource };
+          }
+        });
+        
+        // Wait for batch to complete
+        const batchResults = await Promise.all(batchPromises);
+        
+        // Add suggestions to the list
+        batchResults.forEach(result => {
+          result.suggestions.forEach(suggestion => {
+            // Avoid duplicates
+            if (!allSuggestions.find(s => s.text === suggestion && s.source === result.source)) {
+              allSuggestions.push({
+                text: suggestion,
+                source: result.source,
+                originalQuery: result.query
+              });
+            }
+          });
+        });
+        
+        // Update progress
+        setBulkProgress({ current: Math.min(i + batchSize, suffixes.length), total: suffixes.length });
+        
+        // Add a small delay between batches to be respectful to the APIs
+        if (i + batchSize < suffixes.length) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+      
+      setSuggestions(allSuggestions);
+      
+      // Add to search history
+      const newHistoryItem = {
+        query: `${query} (bulk a-z, 0-9)`,
+        source: selectedSource,
+        timestamp: new Date().toISOString()
+      };
+      
+      setSearchHistory(prev => {
+        const filtered = prev.filter(item => !(item.query.includes(query) && item.source === selectedSource));
+        return [newHistoryItem, ...filtered].slice(0, 10);
+      });
+      
+    } catch (error) {
+      console.error("Error during bulk fetch:", error);
+    } finally {
+      setLoading(false);
+      setBulkSearchMode(false);
+      setBulkProgress({ current: 0, total: 0 });
     }
   };
 
