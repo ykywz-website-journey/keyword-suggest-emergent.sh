@@ -155,8 +155,11 @@ const KeywordSuggestionApp = () => {
       
       for (let i = 0; i < suffixes.length; i += batchSize) {
         const batch = suffixes.slice(i, i + batchSize);
+        const currentBatchNum = Math.floor(i/batchSize) + 1;
         
-        console.log(`Processing batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(suffixes.length/batchSize)}: ${batch.join(', ')}`);
+        setBulkStatus(prev => ({ ...prev, currentBatch: currentBatchNum }));
+        
+        console.log(`Processing batch ${currentBatchNum}/${Math.ceil(suffixes.length/batchSize)}: ${batch.join(', ')}`);
         
         // Create batch of requests with retry logic
         const batchPromises = batch.map(suffix => makeRequestWithRetry(suffix));
@@ -169,6 +172,7 @@ const KeywordSuggestionApp = () => {
           processedCount++;
           
           if (result.success) {
+            setBulkStatus(prev => ({ ...prev, successCount: prev.successCount + 1 }));
             result.suggestions.forEach(suggestion => {
               // Avoid duplicates
               if (!allSuggestions.find(s => s.text === suggestion && s.source === result.source)) {
@@ -179,6 +183,8 @@ const KeywordSuggestionApp = () => {
                 });
               }
             });
+          } else {
+            setBulkStatus(prev => ({ ...prev, failedCount: prev.failedCount + 1 }));
           }
           
           // Update progress
