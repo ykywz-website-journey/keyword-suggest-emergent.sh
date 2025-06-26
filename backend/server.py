@@ -51,24 +51,62 @@ class SuggestionResponse(BaseModel):
 # Helper function to clean Google/YouTube suggestions
 def clean_google_response(text: str) -> List[str]:
     try:
-        # Remove the JSONP callback prefix for Google responses
-        if text.startswith(')]}\''):
+        # Handle Google's JSONP format (window.google.ac.h([[...]])
+        if text.startswith('window.google.ac.h('):
+            # Extract the JSON part from the JSONP response
+            json_str = text[text.index('(')+1:text.rindex(')')]
+            data = json.loads(json_str)
+            
+            # Extract suggestions from Google format
+            if isinstance(data, list) and len(data) > 0 and isinstance(data[0], list):
+                suggestions = []
+                for item in data[0]:
+                    if isinstance(item, list) and len(item) > 0:
+                        suggestions.append(item[0])
+                    elif isinstance(item, str):
+                        # Remove HTML tags from suggestions
+                        clean_text = re.sub(r'<[^>]+>', '', item)
+                        suggestions.append(clean_text)
+                return suggestions
+            return []
+        
+        # Handle the original format as well
+        elif text.startswith(')]}\''):
             text = text[4:]
+            data = json.loads(text)
+            
+            # Extract suggestions from Google format
+            if isinstance(data, list) and len(data) > 1:
+                suggestions = []
+                for item in data[1]:
+                    if isinstance(item, list) and len(item) > 0:
+                        suggestions.append(item[0])
+                    elif isinstance(item, str):
+                        suggestions.append(item)
+                return suggestions
+            return []
         
-        # Parse the JSON
-        data = json.loads(text)
-        
-        # Extract suggestions from Google format
-        if isinstance(data, list) and len(data) > 1:
-            suggestions = []
-            for item in data[1]:
-                if isinstance(item, list) and len(item) > 0:
-                    suggestions.append(item[0])
-                elif isinstance(item, str):
-                    suggestions.append(item)
-            return suggestions
-        return []
-    except:
+        # Try to parse as regular JSON
+        else:
+            data = json.loads(text)
+            
+            # Try different known Google response formats
+            if isinstance(data, list):
+                suggestions = []
+                # Try to extract suggestions from any list structure
+                for item in data:
+                    if isinstance(item, list):
+                        for subitem in item:
+                            if isinstance(subitem, str):
+                                suggestions.append(subitem)
+                            elif isinstance(subitem, list) and len(subitem) > 0 and isinstance(subitem[0], str):
+                                suggestions.append(subitem[0])
+                    elif isinstance(item, str):
+                        suggestions.append(item)
+                return suggestions
+            return []
+    except Exception as e:
+        logging.error(f"Error parsing Google response: {str(e)}")
         return []
 
 def clean_amazon_response(data: dict) -> List[str]:
