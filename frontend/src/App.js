@@ -221,6 +221,13 @@ const KeywordSuggestionApp = () => {
       setLoading(false);
       setBulkSearchMode(false);
       setBulkProgress({ current: 0, total: 0 });
+      setBulkStatus({ 
+        currentBatch: 0, 
+        totalBatches: 0, 
+        retryAttempts: 0,
+        successCount: 0,
+        failedCount: 0 
+      });
     }
   };
 
