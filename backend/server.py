@@ -61,9 +61,7 @@ def clean_google_response(text: str) -> List[str]:
             if isinstance(data, list) and len(data) > 0 and isinstance(data[0], list):
                 suggestions = []
                 for item in data[0]:
-                    if isinstance(item, list) and len(item) > 0:
-                        suggestions.append(item[0])
-                    elif isinstance(item, str):
+                    if isinstance(item, str):
                         # Remove HTML tags from suggestions
                         clean_text = re.sub(r'<[^>]+>', '', item)
                         suggestions.append(clean_text)
@@ -82,7 +80,9 @@ def clean_google_response(text: str) -> List[str]:
                     if isinstance(item, list) and len(item) > 0:
                         suggestions.append(item[0])
                     elif isinstance(item, str):
-                        suggestions.append(item)
+                        # Remove HTML tags
+                        clean_text = re.sub(r'<[^>]+>', '', item)
+                        suggestions.append(clean_text)
                 return suggestions
             return []
         
@@ -98,11 +98,17 @@ def clean_google_response(text: str) -> List[str]:
                     if isinstance(item, list):
                         for subitem in item:
                             if isinstance(subitem, str):
-                                suggestions.append(subitem)
+                                # Remove HTML tags
+                                clean_text = re.sub(r'<[^>]+>', '', subitem)
+                                suggestions.append(clean_text)
                             elif isinstance(subitem, list) and len(subitem) > 0 and isinstance(subitem[0], str):
-                                suggestions.append(subitem[0])
+                                # Remove HTML tags
+                                clean_text = re.sub(r'<[^>]+>', '', subitem[0])
+                                suggestions.append(clean_text)
                     elif isinstance(item, str):
-                        suggestions.append(item)
+                        # Remove HTML tags
+                        clean_text = re.sub(r'<[^>]+>', '', item)
+                        suggestions.append(clean_text)
                 return suggestions
             return []
     except Exception as e:
