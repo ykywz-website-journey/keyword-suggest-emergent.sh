@@ -97,6 +97,9 @@ const KeywordSuggestionApp = () => {
       suffixes.push(i.toString());
     }
     
+    // Define batchSize before using it
+    const batchSize = 3; // Reduced batch size to be more respectful to APIs
+    
     setBulkProgress({ current: 0, total: suffixes.length });
     setBulkStatus({ 
       currentBatch: 0, 
@@ -107,7 +110,6 @@ const KeywordSuggestionApp = () => {
     });
     
     const allSuggestions = [];
-    const batchSize = 3; // Reduced batch size to be more respectful to APIs
     const requestDelay = 1000; // 1 second delay between batches
     const retryDelay = 2000; // 2 seconds delay between retries
     const maxRetries = 3;
