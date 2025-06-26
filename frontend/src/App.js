@@ -211,7 +211,7 @@ const KeywordSuggestionApp = () => {
 
   const saveKeyword = (keyword, source = selectedSource) => {
     const newKeyword = {
-      id: Date.now(),
+      id: Date.now() + Math.random(), // Ensure unique IDs
       text: keyword,
       source: source,
       savedAt: new Date().toISOString()
@@ -221,6 +221,30 @@ const KeywordSuggestionApp = () => {
     const exists = savedKeywords.find(k => k.text === keyword && k.source === source);
     if (!exists) {
       setSavedKeywords(prev => [newKeyword, ...prev]);
+    }
+  };
+
+  const saveAllSuggestions = () => {
+    const newKeywords = [];
+    
+    suggestions.forEach(suggestion => {
+      const text = typeof suggestion === "string" ? suggestion : suggestion.text;
+      const source = typeof suggestion === "string" ? selectedSource : suggestion.source;
+      
+      // Check if not already saved
+      const exists = savedKeywords.find(k => k.text === text && k.source === source);
+      if (!exists && !newKeywords.find(k => k.text === text && k.source === source)) {
+        newKeywords.push({
+          id: Date.now() + Math.random() + newKeywords.length,
+          text: text,
+          source: source,
+          savedAt: new Date().toISOString()
+        });
+      }
+    });
+    
+    if (newKeywords.length > 0) {
+      setSavedKeywords(prev => [...newKeywords, ...prev]);
     }
   };
 
