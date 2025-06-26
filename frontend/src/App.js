@@ -354,9 +354,37 @@ const KeywordSuggestionApp = () => {
                 disabled={loading || !query.trim()}
                 className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {loading ? "Searching..." : "Search"}
+                {loading && !bulkSearchMode ? "Searching..." : "Search"}
+              </button>
+              <button
+                onClick={fetchBulkSuggestions}
+                disabled={loading || !query.trim() || selectedSource === "all"}
+                className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Search with a-z and 0-9 variations"
+              >
+                {loading && bulkSearchMode ? "Bulk Search..." : "🔤 Bulk A-Z"}
               </button>
             </div>
+            
+            {/* Bulk Search Progress */}
+            {bulkSearchMode && (
+              <div className="mt-4 p-4 bg-purple-50 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-purple-700">
+                    Searching variations... ({bulkProgress.current}/{bulkProgress.total})
+                  </span>
+                  <span className="text-sm text-purple-600">
+                    {Math.round((bulkProgress.current / bulkProgress.total) * 100)}%
+                  </span>
+                </div>
+                <div className="w-full bg-purple-200 rounded-full h-2">
+                  <div 
+                    className="bg-purple-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${(bulkProgress.current / bulkProgress.total) * 100}%` }}
+                  ></div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
