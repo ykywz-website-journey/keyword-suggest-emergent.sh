@@ -279,6 +279,12 @@ const KeywordSuggestionApp = () => {
     }
   };
 
+  const handleBulkKeyPress = (e) => {
+    if (e.key === "Enter") {
+      fetchBulkSuggestions();
+    }
+  };
+
   const getSourceIcon = (source) => {
     switch (source) {
       case "google": return "🔍";
