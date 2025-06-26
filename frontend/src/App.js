@@ -408,28 +408,41 @@ const KeywordSuggestionApp = () => {
             {loading ? (
               <div className="flex items-center justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-                <span className="ml-2 text-gray-600">Loading suggestions...</span>
+                <span className="ml-2 text-gray-600">
+                  {bulkSearchMode ? 
+                    `Loading bulk suggestions... (${bulkProgress.current}/${bulkProgress.total})` : 
+                    "Loading suggestions..."
+                  }
+                </span>
               </div>
             ) : suggestions.length > 0 ? (
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {suggestions.map((suggestion, index) => {
                   const text = typeof suggestion === "string" ? suggestion : suggestion.text;
                   const source = typeof suggestion === "string" ? selectedSource : suggestion.source;
+                  const originalQuery = typeof suggestion === "object" ? suggestion.originalQuery : undefined;
                   
                   return (
                     <div
-                      key={index}
+                      key={`${text}-${index}`}
                       className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                     >
-                      <div className="flex items-center space-x-3">
+                      <div className="flex items-center space-x-3 flex-1">
                         <span className={`px-2 py-1 text-xs rounded-full ${getSourceColor(source)}`}>
                           {getSourceIcon(source)} {source}
                         </span>
-                        <span className="text-gray-800">{text}</span>
+                        <div className="flex-1">
+                          <span className="text-gray-800">{text}</span>
+                          {originalQuery && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              from: {originalQuery}
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <button
                         onClick={() => saveKeyword(text, source)}
-                        className="px-3 py-1 bg-green-500 text-white text-sm rounded hover:bg-green-600 transition-colors"
+                        className="px-3 py-1 bg-green-500 text-white text-sm rounded hover:bg-green-600 transition-colors ml-2 flex-shrink-0"
                       >
                         Save
                       </button>
@@ -440,7 +453,15 @@ const KeywordSuggestionApp = () => {
             ) : query ? (
               <p className="text-gray-500 text-center py-8">No suggestions found. Try a different keyword.</p>
             ) : (
-              <p className="text-gray-500 text-center py-8">Enter a keyword to get suggestions.</p>
+              <div className="text-gray-500 text-center py-8">
+                <p className="mb-4">Enter a keyword to get suggestions.</p>
+                <div className="text-sm space-y-2">
+                  <p><strong>💡 Pro Tips:</strong></p>
+                  <p>• Use <strong>🔤 Bulk A-Z</strong> to search "keyword" + a,b,c...z,0,1,2...9</p>
+                  <p>• Perfect for finding long-tail keyword variations</p>
+                  <p>• Use <strong>💾 Save All</strong> to quickly save all results</p>
+                </div>
+              </div>
             )}
           </div>
 
